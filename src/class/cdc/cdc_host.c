@@ -504,6 +504,14 @@ bool cdch_open(uint8_t rhport, uint8_t daddr, tusb_desc_interface_t const *itf_d
       TU_ASSERT(TUSB_DESC_ENDPOINT == desc_ep->bDescriptorType &&
                 TUSB_XFER_BULK     == desc_ep->bmAttributes.xfer);
 
+      // The Arduino Due reports Full speed, and packet size of 512 byes, which is invalid.
+      if ( TUSB_SPEED_FULL == tuh_speed_get(daddr) && desc_ep->wMaxPacketSize > 64 )
+      {
+        // Modify the enpoint descriptor to set max packet size to 64 bytes
+        tusb_desc_endpoint_t *tmp_desc_ep = (tusb_desc_endpoint_t *) p_desc;
+        tmp_desc_ep->wMaxPacketSize = 64;
+      }
+
       TU_ASSERT(tuh_edpt_open(daddr, desc_ep));
 
       if ( tu_edpt_dir(desc_ep->bEndpointAddress) == TUSB_DIR_IN )
