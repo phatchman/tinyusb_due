@@ -508,19 +508,19 @@ static void process_set_config(tuh_xfer_t* xfer)
         config_driver_mount_complete(daddr, instance, NULL, 0);
       }else
       {
-        if (!tuh_descriptor_get_hid_report_cb)
+        uint8_t *desc_report = 0;
+        uint16_t desc_len = 0;
+        uint16_t vid, pid;
+
+        if (tuh_descriptor_get_hid_report_cb &&
+            tuh_vid_pid_get_unconfigured(daddr, &vid, &pid) &&
+            tuh_descriptor_get_hid_report_cb(vid, pid, &desc_report, &desc_len))
+        {
+          config_driver_mount_complete(daddr, instance, desc_report, desc_len);
+        }
+        else
         {
           tuh_descriptor_get_hid_report(daddr, itf_num, hid_itf->report_desc_type, 0, usbh_get_enum_buf(), hid_itf->report_desc_len, process_set_config, CONFIG_COMPLETE);
-        }else
-        {
-          uint8_t *desc_report = 0;
-          uint16_t desc_len = 0;
-          uint16_t vid, pid;
-          if (tuh_vid_pid_get_unconfigured(daddr, &vid, &pid) &&
-              tuh_descriptor_get_hid_report_cb(vid, pid, &desc_report, &desc_len))
-          {
-            config_driver_mount_complete(daddr, instance, desc_report, desc_len);
-          }
         }
       }
       break;
