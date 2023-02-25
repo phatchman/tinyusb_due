@@ -127,6 +127,8 @@ extern void hcd_int_handler(uint8_t rhport);
 
 bool tuh_vid_pid_get(uint8_t daddr, uint16_t* vid, uint16_t* pid);
 
+bool tuh_vid_pid_get_unconfigured(uint8_t daddr, uint16_t* vid, uint16_t* pid);
+
 tusb_speed_t tuh_speed_get(uint8_t daddr);
 
 // Check if device is connected and configured

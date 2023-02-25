@@ -322,16 +322,60 @@ void hidh_close(uint8_t dev_addr)
 //--------------------------------------------------------------------+
 // Enumeration
 //--------------------------------------------------------------------+
+#if 0
+const uint8_t xbox_descriptor_1[] = {
+    0x09, 0x04, 0x00, 0x00, 0x02, 0xFF, 0x47, 0xD0, 0x00,
+    0x09, 0x21, 0x10, 0x01, 0x21, 0x01, 0x22, 0xff, 0x00,
+    0x07, 0x05, 0x01, 0x03, 0x40, 0x00, 0x04,
+    0x07, 0x05, 0x81, 0x03, 0x40, 0x00, 0x04
+};
+const int xbox_descriptor1_size = sizeof(xbox_descriptor_1);
+
+const uint8_t xbox_descriptor_2[] = {
+    0x05, 0x01, 0x09, 0x04, 0xA1, 0x01, 0xA1, 0x02, 0x85, 0x20, 0x75, 0x08, 0x95, 0x03, 
+    0x06, 0x00, 0xFF, 0x81, 0x03, 0x75, 0x01, 0x95, 0x04, 0x06, 0x00, 0xFF, 0x81, 0x02, 
+    0x95, 0x0C, 0x15, 0x00, 0x25, 0x01, 0x05, 0x09, 0x81, 0x02, 0x75, 0x08, 0x95, 0x04, 
+    0x06, 0x00, 0xFF, 0x81, 0x03, 0xC0, 0xA1, 0x00, 0x75, 0x10, 0x95, 0x02, 0x15, 0x00, 
+    0x27, 0xFF, 0xFF, 0x00, 0x00, 0x09, 0x30, 0x09, 0x31, 0x81, 0x03, 0xC0, 0xC0
+};
+//const int xbox_descriptor2_size = sizeof(xbox_descriptor_2);
+const int xbox_descriptor2_size = 255;
+#endif
 
 bool hidh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const *desc_itf, uint16_t max_len)
 {
   (void) rhport;
   (void) max_len;
+  bool is_vendor_descriptor = false;
+  tusb_hid_descriptor_hid_t vendor_hid_descriptor;
 
-  TU_VERIFY(TUSB_CLASS_HID == desc_itf->bInterfaceClass);
+  TU_LOG2("pre-verify\n");
+  TU_VERIFY(TUSB_CLASS_HID == desc_itf->bInterfaceClass || 
+            TUSB_CLASS_VENDOR_SPECIFIC == desc_itf->bInterfaceClass);
+  TU_LOG2("post-verify\n");
 
+  if (TUSB_CLASS_VENDOR_SPECIFIC == desc_itf->bInterfaceClass)
+  {
+    TU_LOG2("vendor-specific\n");
+    // Check if vendor specific class is a supported HID device
+    uint16_t vid, pid;
+    TU_ASSERT(tuh_vid_pid_get_unconfigured(dev_addr, &vid, &pid));
+
+    TU_LOG2("dev_addr = %x, vid = %x, pid = %x\n", dev_addr, vid, pid);
+    if (!tuh_hid_is_hid_device_cb ||
+        !tuh_hid_is_hid_device_cb(vid, pid, desc_itf->bInterfaceNumber))
+    {
+      TU_LOG2("tuh_hid_is_hid_device_cb: false");
+      return false;
+    }
+    TU_LOG2_MEM(desc_itf, max_len, 0);
+
+    TU_VERIFY(tuh_hid_get_hid_descriptor_cb(vid, pid, &vendor_hid_descriptor));
+    is_vendor_descriptor = true;
+    max_len += sizeof(vendor_hid_descriptor);
+  }
   TU_LOG2("[%u] HID opening Interface %u\r\n", dev_addr, desc_itf->bInterfaceNumber);
-
+  TU_LOG2("vendor_desecriptor = %d\n", is_vendor_descriptor);
   // len = interface + hid + n*endpoints
   uint16_t const drv_len = (uint16_t) (sizeof(tusb_desc_interface_t) + sizeof(tusb_hid_descriptor_hid_t) +
                                        desc_itf->bNumEndpoints * sizeof(tusb_desc_endpoint_t));
@@ -340,8 +384,10 @@ bool hidh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const *de
   uint8_t const *p_desc = (uint8_t const *) desc_itf;
 
   //------------- HID descriptor -------------//
-  p_desc = tu_desc_next(p_desc);
-  tusb_hid_descriptor_hid_t const *desc_hid = (tusb_hid_descriptor_hid_t const *) p_desc;
+  if (!is_vendor_descriptor)
+    p_desc = tu_desc_next(p_desc);
+  tusb_hid_descriptor_hid_t const *desc_hid = is_vendor_descriptor ? &vendor_hid_descriptor : (tusb_hid_descriptor_hid_t const *) p_desc;
+  TU_LOG2_MEM(desc_hid, sizeof(tusb_hid_descriptor_hid_t), 0);
   TU_ASSERT(HID_DESC_TYPE_HID == desc_hid->bDescriptorType);
 
   // not enough interface, try to increase CFG_TUH_HID
@@ -462,7 +508,20 @@ static void process_set_config(tuh_xfer_t* xfer)
         config_driver_mount_complete(daddr, instance, NULL, 0);
       }else
       {
-        tuh_descriptor_get_hid_report(daddr, itf_num, hid_itf->report_desc_type, 0, usbh_get_enum_buf(), hid_itf->report_desc_len, process_set_config, CONFIG_COMPLETE);
+        if (!tuh_descriptor_get_hid_report_cb)
+        {
+          tuh_descriptor_get_hid_report(daddr, itf_num, hid_itf->report_desc_type, 0, usbh_get_enum_buf(), hid_itf->report_desc_len, process_set_config, CONFIG_COMPLETE);
+        }else
+        {
+          uint8_t *desc_report = 0;
+          uint16_t desc_len = 0;
+          uint16_t vid, pid;
+          if (tuh_vid_pid_get_unconfigured(daddr, &vid, &pid) &&
+              tuh_descriptor_get_hid_report_cb(vid, pid, &desc_report, &desc_len))
+          {
+            config_driver_mount_complete(daddr, instance, desc_report, desc_len);
+          }
+        }
       }
       break;
 

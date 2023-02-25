@@ -302,6 +302,19 @@ bool tuh_vid_pid_get(uint8_t dev_addr, uint16_t* vid, uint16_t* pid)
   return true;
 }
 
+bool tuh_vid_pid_get_unconfigured(uint8_t dev_addr, uint16_t* vid, uint16_t* pid)
+{
+  *vid = *pid = 0;
+
+  usbh_device_t const* dev = get_device(dev_addr);
+  TU_VERIFY(dev);
+
+  *vid = dev->vid;
+  *pid = dev->pid;
+
+  return true;
+}
+
 tusb_speed_t tuh_speed_get (uint8_t dev_addr)
 {
   usbh_device_t* dev = get_device(dev_addr);

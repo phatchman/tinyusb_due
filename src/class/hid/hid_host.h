@@ -137,6 +137,15 @@ TU_ATTR_WEAK void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t insta
 TU_ATTR_WEAK void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_t protocol);
 
 //--------------------------------------------------------------------+
+// Added for pseudo-HID devices like XBOX controllers
+//--------------------------------------------------------------------+
+// Return true if this is a supported vendor specific HID device
+TU_ATTR_WEAK bool tuh_hid_is_hid_device_cb(uint16_t vid, uint16_t pid, uint8_t itf_num);
+// Get the HID descriptor in descriptor for this device
+TU_ATTR_WEAK bool tuh_hid_get_hid_descriptor_cb(uint16_t vid, uint16_t pid, tusb_hid_descriptor_hid_t *descriptor);
+// Get the vendor specific HID report
+TU_ATTR_WEAK bool tuh_descriptor_get_hid_report_cb(uint16_t vid, uint16_t pid, uint8_t **desc_report, uint16_t *desc_len);
+//--------------------------------------------------------------------+
 // Internal Class Driver API
 //--------------------------------------------------------------------+
 void hidh_init       (void);
